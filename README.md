@@ -5,3 +5,5 @@ Surveyors spend a lot of time drawing recorded deeds which adds unnecessary work
 
 ## Solution
 Utilize OCR and LLMs to interpret and create intelliCAD drawings.
+
+https://nku.instructure.com/courses/91834/pages/individual-project-page-of-eurydice-lunnemann
