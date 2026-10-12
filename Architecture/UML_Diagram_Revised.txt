@@ -1,0 +1,339 @@
+@startuml SurveySystem_Refactored_Architecture
+' Revised UML reflecting SOLID-aligned refactor
+skinparam classAttributeIconSize 0
+skinparam monochrome false
+skinparam packageStyle frame
+skinparam shadowing false
+skinparam linetype ortho
+left to right direction
+
+package "Domain Layer - Ingestion & OCR Models" #ECEFF1 {
+    enum FileTypeEnum {
+        PDF
+        PNG
+        JPEG
+        TIFF
+        DOCX
+        DOC
+    }
+
+    class Document {
+        - filePath : String
+        - fileType : FileTypeEnum
+        - rawBytes : byte[]
+        + getFilePath() : String
+        + getFileType() : FileTypeEnum
+    }
+
+    class OcrResult {
+        - extractedText : String
+        - pageCount : int
+        - confidenceScore : float
+        - metadata : Map<String, Object>
+        + getExtractedText() : String
+        + getConfidenceScore() : float
+    }
+
+    class OcrQualityScore {
+        - engineConfidence : float
+        - domainLexiconScore : float
+        - regexHitCount : int
+        - overallScore : float
+        + isAcceptable(threshold : float) : boolean
+        + getOverallScore() : float
+    }
+}
+
+package "Domain Layer - Survey & Math Models" #ECEFF1 {
+    class Point2D {
+        - easting : double
+        - northing : double
+        + getEasting() : double
+        + getNorthing() : double
+    }
+
+    class TraverseModel {
+        - pointOfBeginningDesc : String
+        - calls : List<ParsedCall>
+        - sourceText : String
+        + getCalls() : List<ParsedCall>
+    }
+
+    class ParsedCall {
+        - sequenceIndex : int
+        - rawText : String
+        - callType : CallTypeEnum
+        - bearing : Bearing
+        - distance : Distance
+        - radius : Distance
+        - arcLength : Distance
+        - chordBearing : Bearing
+        + isCurve() : boolean
+    }
+
+    class ClosureReport {
+        - totalPerimeter : double
+        - closureErrorDistance : double
+        - precisionRatio : double
+        - closureErrorBearing : Bearing
+        - isAcceptable : boolean
+        + getPrecisionRatio() : double
+        + isAcceptable() : boolean
+    }
+
+    class ParsingCorrectionFeedback {
+        - closureErrorDistance : double
+        - precisionRatio : double
+        - flaggedCallIndices : List<int>
+        - correctionHint : String
+        + getFlaggedIndices() : List<int>
+        + getCorrectionHint() : String
+    }
+
+    class CadExportConfig {
+        - outputFilePath : String
+        - layerPrefix : String
+        - textHeight : double
+        - includeAnnotations : boolean
+        + getOutputFilePath() : String
+    }
+}
+
+package "Application Layer - Workflow Orchestration" #E3F2FD {
+    class SurveyProcessingApplicationService {
+        - ingestionService : IDocumentIngestionService
+        - extractionService : IOcrExtractionService
+        - parsingService : ISurveyParsingService
+        - validationService : ITraverseValidationService
+        - exportService : ICadExportService
+        + processSurveyDocument(doc : Document) : SurveyProcessingResult
+    }
+
+    class SurveyProcessingResult {
+        - traverse : TraverseModel
+        - closureReport : ClosureReport
+        - outputFilePath : String
+        + getTraverse() : TraverseModel
+    }
+}
+
+package "Ingestion & OCR Services" #E8F5E9 {
+    interface IDocumentIngestionService {
+        + ingest(filePath : String) : Document
+    }
+
+    interface ITextExtractor {
+        + supports(doc : Document) : boolean
+        + extractText(doc : Document) : OcrResult
+    }
+
+    interface IOcrPreProcessor {
+        + process(doc : Document) : Document
+    }
+
+    interface IOcrQualityEvaluator {
+        + evaluate(result : OcrResult) : OcrQualityScore
+    }
+
+    interface IOcrRetryPolicy {
+        + shouldRetry(score : OcrQualityScore, attemptCount : int) : boolean
+        + getNextExtractor(candidates : List<ITextExtractor>, attemptCount : int) : ITextExtractor
+    }
+
+    interface ITextExtractorRegistry {
+        + registerExtractor(extractor : ITextExtractor) : void
+        + findSupportedExtractors(doc : Document) : List<ITextExtractor>
+    }
+
+    interface IOcrExtractionService {
+        + extract(doc : Document) : OcrResult
+    }
+
+    class DefaultDocumentIngestionService implements IDocumentIngestionService {
+        + ingest(filePath : String) : Document
+    }
+
+    class TextExtractorRegistry implements ITextExtractorRegistry {
+        - extractors : List<ITextExtractor>
+        + registerExtractor(extractor : ITextExtractor) : void
+        + findSupportedExtractors(doc : Document) : List<ITextExtractor>
+    }
+
+    class OcrExtractionService implements IOcrExtractionService {
+        - registry : ITextExtractorRegistry
+        - preProcessor : IOcrPreProcessor
+        - qualityEvaluator : IOcrQualityEvaluator
+        - retryPolicy : IOcrRetryPolicy
+        + extract(doc : Document) : OcrResult
+    }
+
+    class WordDocumentExtractor implements ITextExtractor {
+        + supports(doc : Document) : boolean
+        + extractText(doc : Document) : OcrResult
+    }
+
+    class PdfTextExtractor implements ITextExtractor {
+        + supports(doc : Document) : boolean
+        + extractText(doc : Document) : OcrResult
+    }
+
+    class TesseractOcrAdapter implements ITextExtractor {
+        + supports(doc : Document) : boolean
+        + extractText(doc : Document) : OcrResult
+        + getEngineConfidence() : float
+    }
+
+    class CloudOcrAdapter implements ITextExtractor {
+        + supports(doc : Document) : boolean
+        + extractText(doc : Document) : OcrResult
+        + getEngineConfidence() : float
+    }
+
+    class ImageDeskewPreProcessor implements IOcrPreProcessor {
+        + process(doc : Document) : Document
+    }
+
+    class SurveyLexiconQualityEvaluator implements IOcrQualityEvaluator {
+        + evaluate(result : OcrResult) : OcrQualityScore
+    }
+
+    class AdaptiveOcrRetryPolicy implements IOcrRetryPolicy {
+        + shouldRetry(score : OcrQualityScore, attemptCount : int) : boolean
+        + getNextExtractor(candidates : List<ITextExtractor>, attemptCount : int) : ITextExtractor
+    }
+}
+
+package "Survey Parsing & Validation Services" #FFF3E0 {
+    interface ISurveyParser {
+        + parse(rawText : String) : TraverseModel
+    }
+
+    interface IParsingRecoveryService {
+        + retryWithFeedback(rawText : String, feedback : ParsingCorrectionFeedback) : TraverseModel
+    }
+
+    interface ISurveyParsingService {
+        + parse(rawText : String) : TraverseModel
+    }
+
+    class LlmSurveyParser implements ISurveyParser {
+        - modelName : String
+        - temperature : double
+        + parse(rawText : String) : TraverseModel
+    }
+
+    class SystemSurveyPrompter {
+        - systemPromptTemplate : String
+        + buildInitialPrompt(rawText : String) : String
+        + buildCorrectionPrompt(rawText : String, feedback : ParsingCorrectionFeedback) : String
+    }
+
+    class ParsingRecoveryService implements IParsingRecoveryService {
+        - parser : ISurveyParser
+        - prompter : SystemSurveyPrompter
+        + retryWithFeedback(rawText : String, feedback : ParsingCorrectionFeedback) : TraverseModel
+    }
+
+    class SurveyParsingService implements ISurveyParsingService {
+        - parser : ISurveyParser
+        - recoveryService : IParsingRecoveryService
+        - validationService : ITraverseValidationService
+        + parse(rawText : String) : TraverseModel
+    }
+
+    class SurveyFeedbackService {
+        + generateFeedback(traverse : TraverseModel, report : ClosureReport) : ParsingCorrectionFeedback
+    }
+}
+
+package "Geometry & Verification Services" #E8F5E9 {
+    interface ITraverseCalculator {
+        + computeCoordinates(traverse : TraverseModel, pob : Point2D) : List<Point2D>
+    }
+
+    interface ITraverseValidationService {
+        + evaluateClosure(traverse : TraverseModel, minPrecisionThreshold : double) : ClosureReport
+    }
+
+    class StandardTraverseCalculator implements ITraverseCalculator {
+        + computeCoordinates(traverse : TraverseModel, pob : Point2D) : List<Point2D>
+    }
+
+    class SurveyClosureValidator implements ITraverseValidationService {
+        - calculator : ITraverseCalculator
+        + evaluateClosure(traverse : TraverseModel, minPrecisionThreshold : double) : ClosureReport
+    }
+}
+
+package "CAD Export Services" #F3E5F5 {
+    interface ICadLayerManager {
+        + initializeStandardLayers(doc : Object) : void
+        + getLayerName(purpose : String) : String
+    }
+
+    interface ICadAnnotationRenderer {
+        + annotateCall(msp : Object, startPt : Point2D, endPt : Point2D, call : ParsedCall) : void
+    }
+
+    interface ICadDrawer {
+        + drawTraverse(points : List<Point2D>, traverse : TraverseModel, config : CadExportConfig) : void
+    }
+
+    interface ICadExportService {
+        + generateDxfFile(points : List<Point2D>, traverse : TraverseModel, config : CadExportConfig) : String
+    }
+
+    class StandardCadLayerManager implements ICadLayerManager {
+        + initializeStandardLayers(doc : Object) : void
+        + getLayerName(purpose : String) : String
+    }
+
+    class SurveyAnnotationRenderer implements ICadAnnotationRenderer {
+        + annotateCall(msp : Object, startPt : Point2D, endPt : Point2D, call : ParsedCall) : void
+    }
+
+    class EzdxfCadDrawer implements ICadDrawer {
+        - layerManager : ICadLayerManager
+        - annotationRenderer : ICadAnnotationRenderer
+        + drawTraverse(points : List<Point2D>, traverse : TraverseModel, config : CadExportConfig) : void
+    }
+
+    class CadExportService implements ICadExportService {
+        - drawer : ICadDrawer
+        + generateDxfFile(points : List<Point2D>, traverse : TraverseModel, config : CadExportConfig) : String
+    }
+}
+
+' Composition / Delegation relationships
+SurveyProcessingApplicationService --> IDocumentIngestionService
+SurveyProcessingApplicationService --> IOcrExtractionService
+SurveyProcessingApplicationService --> ISurveyParsingService
+SurveyProcessingApplicationService --> ITraverseValidationService
+SurveyProcessingApplicationService --> ICadExportService
+
+TextExtractorRegistry "1" o-- "many" ITextExtractor : manages
+OcrExtractionService --> ITextExtractorRegistry : queries
+OcrExtractionService --> IOcrPreProcessor : preprocesses
+OcrExtractionService --> IOcrQualityEvaluator : assesses
+OcrExtractionService --> IOcrRetryPolicy : decides retry
+
+TraverseModel "1" *-- "many" ParsedCall : aggregates
+LlmSurveyParser ..> TraverseModel : produces
+SystemSurveyPrompter ..> ParsingCorrectionFeedback : uses for correction prompt
+SurveyParsingService --> ISurveyParser : delegates parsing
+SurveyParsingService --> IParsingRecoveryService : retries on invalid parse
+SurveyParsingService --> ITraverseValidationService : validates closure
+SurveyFeedbackService ..> ClosureReport : evaluates
+SurveyFeedbackService ..> ParsingCorrectionFeedback : constructs
+
+SurveyClosureValidator --> ITraverseCalculator : uses for coordinate math
+SurveyClosureValidator ..> ClosureReport : generates
+
+EzdxfCadDrawer --> ICadLayerManager : manages layers
+EzdxfCadDrawer --> ICadAnnotationRenderer : delegates text & dimensions
+EzdxfCadDrawer ..> CadExportConfig : reads settings
+CadExportService --> ICadDrawer : delegates drawing tasks
+CadExportService ..> Point2D : consumes calculated vertices
+CadExportService ..> TraverseModel : reads call metadata for labeling
+
+@enduml
