@@ -2,13 +2,16 @@
 
 import math
 
-from .geometry import StandardTraverseCalculator
-from .models import Bearing, ClosureReport, Point2D, TraverseModel
+from ..contracts.interfaces import ITraverseCalculator, ITraverseValidationService
+from ..domain.models import Bearing, ClosureReport, Point2D, TraverseModel
+from .calculator import StandardTraverseCalculator
 
 
-class SurveyClosureValidator: #handle closure creation
-    def __init__(self, calculator: StandardTraverseCalculator | None = None) -> None:
-        self._calculator = calculator or StandardTraverseCalculator()
+class SurveyClosureValidator(ITraverseValidationService): #handle closure creation
+    def __init__(self, calculator: ITraverseCalculator | None = None) -> None:
+        self._calculator = (
+            calculator if calculator is not None else StandardTraverseCalculator()
+        )
 
     def evaluate_closure( #populates a closure report
         self,

@@ -7,10 +7,10 @@ Surveyors spend a lot of time drawing recorded deeds which adds unnecessary work
 Utilize OCR and LLMs to interpret and create intelliCAD drawings.
 
 ## Implementation
-The initial Python implementation is in the [Code](./Code) folder. It currently
-calculates and validates straight-line traverses and exports DXF files with
-ezdxf. OCR and LLM integration are deferred while the first geometry-to-DXF
-workflow is established. See [Code/README.md](./Code/README.md) for setup,
-conventions, and an example.
+The initial Python implementation is in the [Code](./Code) folder. It accepts
+plain legal-description text for local Qwen3 parsing through Ollama, checks
+straight-line traverse closure, and exports DXF files with ezdxf. OCR and curve
+geometry are not implemented yet. See [Code/README.md](./Code/README.md) for
+setup, architecture, and limitations.
 
 https://nku.instructure.com/courses/91834/pages/individual-project-page-of-eurydice-lunnemann
